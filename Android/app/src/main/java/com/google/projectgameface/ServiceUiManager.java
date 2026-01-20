@@ -106,6 +106,15 @@ public class ServiceUiManager {
   public static final int DEFAULT_FLOATING_CAMERA_WIDTH = 330;
   public static final int DEFAULT_FLOATING_CAMERA_HEIGHT = 330;
 
+  /** Camera size presets: Small, Medium, Large, Extra Large */
+  public static final int[][] CAMERA_SIZE_PRESETS = {
+      {200, 200},   // Small
+      {330, 330},   // Medium (default)
+      {450, 450},   // Large
+      {550, 550}    // Extra Large
+  };
+  public static final String[] CAMERA_SIZE_NAMES = {"Small", "Medium", "Large", "Extra Large"};
+
 
 
   Intent mainActivityIntent;
@@ -417,7 +426,13 @@ public class ServiceUiManager {
     updateScreenInfo();
     try {
       windowManager.addView(cameraBoxView, cameraBoxLayoutParams);
-      resizeCameraBox(DEFAULT_FLOATING_CAMERA_WIDTH, DEFAULT_FLOATING_CAMERA_HEIGHT);
+      // Use saved camera size preference
+      SharedPreferences preferences =
+          parentContext.getSharedPreferences("GameFaceLocalConfig", Context.MODE_PRIVATE);
+      int sizeIndex = preferences.getInt("cameraSizeIndex", 1); // Default to Medium
+      int width = CAMERA_SIZE_PRESETS[sizeIndex][0];
+      int height = CAMERA_SIZE_PRESETS[sizeIndex][1];
+      resizeCameraBox(width, height);
     } catch (RuntimeException e) {
       Log.w(TAG, "windowManager failed to add floatCamView: " + e.getMessage());
     }
@@ -451,7 +466,14 @@ public class ServiceUiManager {
     Log.i(TAG, "maximizeCameraBox");
     cameraBoxView.findViewById(R.id.previewVideo).setVisibility(View.VISIBLE);
     settingBtn.setVisibility(View.VISIBLE);
-    resizeCameraBox(DEFAULT_FLOATING_CAMERA_WIDTH, DEFAULT_FLOATING_CAMERA_HEIGHT);
+
+    // Use saved camera size preference
+    SharedPreferences preferences =
+        parentContext.getSharedPreferences("GameFaceLocalConfig", Context.MODE_PRIVATE);
+    int sizeIndex = preferences.getInt("cameraSizeIndex", 1); // Default to Medium
+    int width = CAMERA_SIZE_PRESETS[sizeIndex][0];
+    int height = CAMERA_SIZE_PRESETS[sizeIndex][1];
+    resizeCameraBox(width, height);
 
     cameraBoxView.findViewById(R.id.popBtn).setBackground(null);
     cameraBoxOverlay.setVisibility(View.VISIBLE);
@@ -627,11 +649,11 @@ public class ServiceUiManager {
         noseCoord[1] * innerCameraImageView.getHeight() / mpImageHeight);
   }
 
-  public void drawGaze(float[] noseBridgeCoord, float[] faceNormal, boolean isLooking, boolean gazeEnabled, int mpImageWidth, int mpImageHeight) {
+  public void drawGaze(float[] noseBridgeCoord, float[] faceNormal, boolean isLooking, boolean gazeEnabled, boolean isWaiting, int failedCheck, int mpImageWidth, int mpImageHeight) {
     float bridgeX = noseBridgeCoord[0] * innerCameraImageView.getWidth() / mpImageWidth;
     float bridgeY = noseBridgeCoord[1] * innerCameraImageView.getHeight() / mpImageHeight;
     // Pass full 3D normal for debug display, X/Y used for line direction
-    cameraBoxOverlay.setGaze(bridgeX, bridgeY, faceNormal[0], faceNormal[1], faceNormal[2], isLooking, gazeEnabled);
+    cameraBoxOverlay.setGaze(bridgeX, bridgeY, faceNormal[0], faceNormal[1], faceNormal[2], isLooking, gazeEnabled, isWaiting, failedCheck);
   }
 
   /** Fly camera box to screen center and hide all buttons (for setting page. ). */
@@ -677,9 +699,11 @@ public class ServiceUiManager {
                   (float) cameraBoxLayoutParams.y / (float) screenSize.y)
                   * screenSize.y;
 
-          float width = preferences.getFloat("defaultWidth", 0);
-          float height = preferences.getFloat("defaultHeight", 0);
-          resizeCameraBox((int) width, (int) height);
+          // Use saved camera size preference
+          int sizeIndex = preferences.getInt("cameraSizeIndex", 1); // Default to Medium
+          int width = CAMERA_SIZE_PRESETS[sizeIndex][0];
+          int height = CAMERA_SIZE_PRESETS[sizeIndex][1];
+          resizeCameraBox(width, height);
 
           playFlyCameraBoxAnimation((int) positionX, (int) positionY, 300);
           cameraBoxView.findViewById(R.id.popBtn).setVisibility(View.VISIBLE);
@@ -687,7 +711,25 @@ public class ServiceUiManager {
         }
       };
 
-
+  /** Handle camera size change from settings. */
+  public BroadcastReceiver cameraSizeChangeReceiver =
+      new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+          int sizeIndex = intent.getIntExtra("sizeIndex", 1); // Default to Medium
+          if (sizeIndex >= 0 && sizeIndex < CAMERA_SIZE_PRESETS.length) {
+            int width = CAMERA_SIZE_PRESETS[sizeIndex][0];
+            int height = CAMERA_SIZE_PRESETS[sizeIndex][1];
+            if (cameraBoxState == CameraBoxState.MAXIMIZE) {
+              resizeCameraBox(width, height);
+            }
+            // Save to preferences for persistence
+            SharedPreferences preferences =
+                parentContext.getSharedPreferences("GameFaceLocalConfig", Context.MODE_PRIVATE);
+            preferences.edit().putInt("cameraSizeIndex", sizeIndex).apply();
+          }
+        }
+      };
 
   /** Draw small green dot where the touch event occur. */
   public void drawTouchDot(int[] cursorPositionXY) {

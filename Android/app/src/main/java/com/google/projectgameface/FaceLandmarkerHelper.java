@@ -67,12 +67,26 @@ class FaceLandmarkerHelper extends HandlerThread {
     private static final int LEFT_CHEEK_INDEX = 234;
     private static final int RIGHT_CHEEK_INDEX = 454;
 
+    // Eye landmarks (iris centers) - used for validation
+    private static final int LEFT_EYE_CENTER_INDEX = 468;
+    private static final int RIGHT_EYE_CENTER_INDEX = 473;
+
+    // Mouth landmark for validation
+    private static final int MOUTH_CENTER_INDEX = 13;
+
+    // Landmark validation thresholds (in normalized coordinates 0-1)
+    // Max Y difference between eyes (they should be at similar height)
+    private static final float MAX_EYE_Y_DIFF = 0.15f;
+    // Min/max face aspect ratio (width / height)
+    private static final float MIN_FACE_ASPECT_RATIO = 0.5f;
+    private static final float MAX_FACE_ASPECT_RATIO = 1.5f;
+
     public volatile boolean isRunning = false;
 
     // Configs for FaceLandmarks model.
-    private static final float MIN_FACE_DETECTION_CONFIDENCE = 0.5f;
-    private static final float MIN_FACE_TRACKING_CONFIDENCE = 0.5f;
-    private static final float MIN_FACE_PRESENCE_CONFIDENCE = 0.5f;
+    private static final float MIN_FACE_DETECTION_CONFIDENCE = 0.7f;
+    private static final float MIN_FACE_TRACKING_CONFIDENCE = 0.7f;
+    private static final float MIN_FACE_PRESENCE_CONFIDENCE = 0.7f;
     private static final int MAX_NUM_FACES = 1;
     private static final RunningMode RUNNING_MODE = RunningMode.LIVE_STREAM;
 
@@ -95,6 +109,9 @@ class FaceLandmarkerHelper extends HandlerThread {
     float faceNormalY = 0.f;
     float faceNormalZ = 0.f;
     boolean isLookingAtCamera = false;
+
+    // Tracks which validation check failed (0 = passed, 1-5 = specific check that failed)
+    int failedValidationCheck = 0;
 
     // Configurable gaze thresholds (degrees)
     private float yawThresholdDegrees = 30.f;
@@ -329,7 +346,6 @@ class FaceLandmarkerHelper extends HandlerThread {
         }
 
         if (!result.faceLandmarks().isEmpty()) {
-            isFaceVisible = true;
             currHeadX = result.faceLandmarks().get(0).get(FOREHEAD_INDEX).x() * mpInputWidth;
             currHeadY = result.faceLandmarks().get(0).get(FOREHEAD_INDEX).y() * mpInputHeight;
             currNoseTipX = result.faceLandmarks().get(0).get(NOSE_TIP_INDEX).x() * mpInputWidth;
@@ -354,6 +370,24 @@ class FaceLandmarkerHelper extends HandlerThread {
             float rightCheekX = result.faceLandmarks().get(0).get(RIGHT_CHEEK_INDEX).x();
             float rightCheekY = result.faceLandmarks().get(0).get(RIGHT_CHEEK_INDEX).y();
             float rightCheekZ = result.faceLandmarks().get(0).get(RIGHT_CHEEK_INDEX).z();
+
+            // Get eye and mouth positions for validation
+            float leftEyeX = result.faceLandmarks().get(0).get(LEFT_EYE_CENTER_INDEX).x();
+            float leftEyeY = result.faceLandmarks().get(0).get(LEFT_EYE_CENTER_INDEX).y();
+            float rightEyeX = result.faceLandmarks().get(0).get(RIGHT_EYE_CENTER_INDEX).x();
+            float rightEyeY = result.faceLandmarks().get(0).get(RIGHT_EYE_CENTER_INDEX).y();
+            float noseX = result.faceLandmarks().get(0).get(NOSE_TIP_INDEX).x();
+            float noseY = result.faceLandmarks().get(0).get(NOSE_TIP_INDEX).y();
+            float mouthY = result.faceLandmarks().get(0).get(MOUTH_CENTER_INDEX).y();
+
+            // Validate landmark positions to filter false detections
+            // Returns 0 if passed, 1-5 indicates which check failed
+            failedValidationCheck = validateLandmarks(
+                leftEyeX, leftEyeY, rightEyeX, rightEyeY,
+                noseX, noseY, mouthY, foreheadY, chinY,
+                leftCheekX, rightCheekX);
+
+            isFaceVisible = (failedValidationCheck == 0);
 
             // Vector A: from chin to forehead (vertical axis of face, pointing up)
             float ax = foreheadX - chinX;
@@ -397,13 +431,6 @@ class FaceLandmarkerHelper extends HandlerThread {
             boolean lookingPitch = pitchAngle < pitchThresholdDegrees;
             isLookingAtCamera = lookingYaw && lookingPitch;
 
-/*
-            looking at camera logic without regard to direction:
-            float crossProduct = -faceNormalZ;
-            float angleFromCamera = (float) Math.toDegrees(Math.acos(Math.abs(crossProduct)));
-            isLookingAtCamera = angleFromCamera < LOOKING_THRESHOLD_DEGREES;
-*/
-
             if (result.faceBlendshapes().isPresent()) {
                 // Convert from Category to simple float array.
                 for (int i = 0; i < TOTAL_BLENDSHAPES; i++) {
@@ -415,6 +442,7 @@ class FaceLandmarkerHelper extends HandlerThread {
             lastMeasurementTsMs = SystemClock.uptimeMillis();
         } else {
             isFaceVisible = false;
+            failedValidationCheck = 0; // No face detected, so validation wasn't the issue
         }
 
         long ts = SystemClock.uptimeMillis();
@@ -433,6 +461,9 @@ class FaceLandmarkerHelper extends HandlerThread {
     public float[] getFaceNormal() { return new float[] {faceNormalX, faceNormalY, faceNormalZ}; }
 
     public boolean isLookingAtCamera() { return isLookingAtCamera; }
+
+    /** Returns which validation check failed (0 = passed, 1-5 = specific check). */
+    public int getFailedValidationCheck() { return failedValidationCheck; }
 
     /** Set the yaw threshold in degrees for gaze detection. */
     public void setYawThreshold(float degrees) {
@@ -474,6 +505,54 @@ class FaceLandmarkerHelper extends HandlerThread {
             faceLandmarker.close();
             faceLandmarker = null;
         }
+    }
+
+    /**
+     * Validates that detected landmarks are in physically plausible positions for a real face.
+     * This helps filter out false positives from profile views or random objects.
+     *
+     * @return 0 if landmarks pass validation, 1-5 indicates which check failed
+     */
+    private int validateLandmarks(
+            float leftEyeX, float leftEyeY, float rightEyeX, float rightEyeY,
+            float noseX, float noseY, float mouthY, float foreheadY, float chinY,
+            float leftCheekX, float rightCheekX) {
+
+        // Check 1: Eyes should be at similar Y level (not too tilted)
+        float eyeYDiff = Math.abs(leftEyeY - rightEyeY);
+        if (eyeYDiff > MAX_EYE_Y_DIFF) {
+            return 1;
+        }
+
+        // Check 2: Nose should be below eyes (higher Y = lower on screen)
+        float avgEyeY = (leftEyeY + rightEyeY) / 2f;
+        if (noseY < avgEyeY) {
+            return 2;
+        }
+
+        // Check 3: Nose should be horizontally between the eyes
+        float minEyeX = Math.min(leftEyeX, rightEyeX);
+        float maxEyeX = Math.max(leftEyeX, rightEyeX);
+        if (noseX < minEyeX || noseX > maxEyeX) {
+            return 3;
+        }
+
+        // Check 4: Mouth should be below nose
+        if (mouthY < noseY) {
+            return 4;
+        }
+
+        // Check 5: Face aspect ratio should be reasonable
+        float faceWidth = Math.abs(rightCheekX - leftCheekX);
+        float faceHeight = Math.abs(chinY - foreheadY);
+        if (faceHeight > 0) {
+            float aspectRatio = faceWidth / faceHeight;
+            if (aspectRatio < MIN_FACE_ASPECT_RATIO || aspectRatio > MAX_FACE_ASPECT_RATIO) {
+                return 5;
+            }
+        }
+
+        return 0; // All checks passed
     }
 
     /** Destroys {@link FaceLandmarker} and stop. */

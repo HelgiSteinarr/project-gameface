@@ -12,6 +12,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * MODIFICATION NOTICE
+ * as per the licence its required to give notice that this code has been modified by a third party.
+ * 2026 - Helgi Steinarr Juliusson, changes can be found in version control.
  */
 
 package com.google.projectgameface;
@@ -62,6 +66,10 @@ public class CursorSpeed extends AppCompatActivity {
     private SeekBar seekBarPitchThreshold;
     private TextView textViewYawThreshold;
     private TextView textViewPitchThreshold;
+
+    // Debug settings
+    private TextView btnCameraSize;
+    private int currentCameraSizeIndex = 1; // Default to Medium
 
     private final int[] viewIds = {
         R.id.fasterUp,
@@ -137,10 +145,32 @@ public class CursorSpeed extends AppCompatActivity {
         // Gaze settings setup
         setUpGazeSettings();
 
+        // Debug settings setup
+        setUpDebugSettings();
+
         // Binding buttons.
         for (int id : viewIds) {
             findViewById(id).setOnClickListener(buttonClickListener);
         }
+    }
+
+    private void setUpDebugSettings() {
+        SharedPreferences preferences = getSharedPreferences("GameFaceLocalConfig", Context.MODE_PRIVATE);
+        currentCameraSizeIndex = preferences.getInt("cameraSizeIndex", 1); // Default to Medium
+
+        btnCameraSize = findViewById(R.id.btnCameraSize);
+        btnCameraSize.setText(ServiceUiManager.CAMERA_SIZE_NAMES[currentCameraSizeIndex]);
+        btnCameraSize.setOnClickListener(v -> {
+            // Cycle to next size
+            currentCameraSizeIndex = (currentCameraSizeIndex + 1) % ServiceUiManager.CAMERA_SIZE_PRESETS.length;
+            btnCameraSize.setText(ServiceUiManager.CAMERA_SIZE_NAMES[currentCameraSizeIndex]);
+
+            // Save and broadcast the change
+            preferences.edit().putInt("cameraSizeIndex", currentCameraSizeIndex).apply();
+            Intent intent = new Intent("CHANGE_CAMERA_SIZE");
+            intent.putExtra("sizeIndex", currentCameraSizeIndex);
+            sendBroadcast(intent);
+        });
     }
 
     private void setUpGazeSettings() {

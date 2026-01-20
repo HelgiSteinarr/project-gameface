@@ -51,6 +51,8 @@ public class CameraBoxOverlay extends View {
     private float gazeEndY = -100.f;
     private boolean isLooking = false;
     private boolean gazeEnabled = true;
+    private boolean isWaiting = false;
+    private int failedValidationCheck = 0;
     private static final float GAZE_LINE_LENGTH = 40.f;
 
     /** Debug: face normal values for display. */
@@ -67,6 +69,7 @@ public class CameraBoxOverlay extends View {
     private Paint noseBridgePaint;
     private Paint gazePaintGreen;
     private Paint gazePaintRed;
+    private Paint gazePaintYellow;
 
     public CameraBoxOverlay(Context context, AttributeSet attributeSet) {
         super(context, attributeSet);
@@ -94,6 +97,12 @@ public class CameraBoxOverlay extends View {
         gazePaintRed.setColor(ContextCompat.getColor(getContext(), android.R.color.holo_red_light));
         gazePaintRed.setStrokeWidth(3);
         gazePaintRed.setTextSize(24);
+
+        gazePaintYellow = new Paint();
+        gazePaintYellow.setStyle(Paint.Style.FILL);
+        gazePaintYellow.setColor(ContextCompat.getColor(getContext(), android.R.color.holo_orange_light));
+        gazePaintYellow.setStrokeWidth(3);
+        gazePaintYellow.setTextSize(24);
     }
 
     @Override
@@ -107,18 +116,39 @@ public class CameraBoxOverlay extends View {
 
         // Debug: face normal line (direction face is pointing)
         // Use neutral color (white) when gaze auto-pause is disabled
-        Paint gazePaint = gazeEnabled ? (isLooking ? gazePaintGreen : gazePaintRed) : paint;
+        Paint gazePaint;
+        if (!gazeEnabled) {
+            gazePaint = paint;
+        } else if (isWaiting) {
+            gazePaint = gazePaintYellow;
+        } else if (isLooking) {
+            gazePaint = gazePaintGreen;
+        } else {
+            gazePaint = gazePaintRed;
+        }
         canvas.drawLine(noseBridgeX, noseBridgeY, gazeEndX, gazeEndY, gazePaint);
 
         // Debug: looking status (only show when gaze auto-pause is enabled)
         if (gazeEnabled) {
-            String lookingText = isLooking ? "Looking" : "Not looking";
+            String lookingText;
+            if (isWaiting) {
+                lookingText = "Waiting...";
+            } else if (isLooking) {
+                lookingText = "Looking";
+            } else {
+                lookingText = "Not looking";
+            }
             canvas.drawText(lookingText, DEBUG_TEXT_LOC_X, 30, gazePaint);
         }
 
         // Debug: face normal vector values
         String normalText = String.format("N:(%.2f,%.2f,%.2f)", debugNormalX, debugNormalY, debugNormalZ);
         canvas.drawText(normalText, DEBUG_TEXT_LOC_X, 55, paint);
+
+        // Debug: validation status (shows if plausibility check is blocking tracking)
+        if (failedValidationCheck > 0) {
+            canvas.drawText("Validation failed (check " + failedValidationCheck + ")", DEBUG_TEXT_LOC_X, 80, gazePaintRed);
+        }
 
         canvas.drawText(preprocessTimeText, DEBUG_TEXT_LOC_X, DEBUG_TEXT_LOC_Y, paint);
         canvas.drawText(mediapipeTimeText, DEBUG_TEXT_LOC_X, DEBUG_TEXT_LOC_Y + 50, paint);
@@ -143,13 +173,15 @@ public class CameraBoxOverlay extends View {
         invalidate();
     }
 
-    public void setGaze(float bridgeX, float bridgeY, float normalX, float normalY, float normalZ, boolean looking, boolean enabled) {
+    public void setGaze(float bridgeX, float bridgeY, float normalX, float normalY, float normalZ, boolean looking, boolean enabled, boolean waiting, int failedCheck) {
         noseBridgeX = bridgeX;
         noseBridgeY = bridgeY;
         gazeEndX = bridgeX + normalX * GAZE_LINE_LENGTH;
         gazeEndY = bridgeY + normalY * GAZE_LINE_LENGTH;
         isLooking = looking;
         gazeEnabled = enabled;
+        isWaiting = waiting;
+        failedValidationCheck = failedCheck;
         // Store for debug display
         debugNormalX = normalX;
         debugNormalY = normalY;

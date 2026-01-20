@@ -113,6 +113,12 @@ public class CursorAccessibilityService extends AccessibilityService implements 
     /** Whether gaze-based auto-pause is enabled. */
     private boolean gazePauseEnabled = true;
 
+    /** Timestamp when "looking" state was first detected (for debounce). */
+    private long lookingStartTime = 0;
+
+    /** Delay in ms before "looking" state triggers resume (prevents false positives). */
+    private static final long LOOKING_DEBOUNCE_MS = 1500;
+
     /** The setting app may request the float blendshape score. */
     private String requestedScoreBlendshapeName = "";
 
@@ -229,6 +235,10 @@ public class CursorAccessibilityService extends AccessibilityService implements 
                 serviceUiManager.flyOutWindowReceiver,
                 new IntentFilter("FLY_OUT_FLOAT_WINDOW"),
                 RECEIVER_EXPORTED);
+            registerReceiver(
+                serviceUiManager.cameraSizeChangeReceiver,
+                new IntentFilter("CHANGE_CAMERA_SIZE"),
+                RECEIVER_EXPORTED);
         } else {
             registerReceiver(changeServiceStateReceiver, new IntentFilter("CHANGE_SERVICE_STATE"));
             registerReceiver(requestServiceStateReceiver, new IntentFilter("REQUEST_SERVICE_STATE"));
@@ -240,6 +250,8 @@ public class CursorAccessibilityService extends AccessibilityService implements 
                 serviceUiManager.flyInWindowReceiver, new IntentFilter("FLY_IN_FLOAT_WINDOW"));
             registerReceiver(
                 serviceUiManager.flyOutWindowReceiver, new IntentFilter("FLY_OUT_FLOAT_WINDOW"));
+            registerReceiver(
+                serviceUiManager.cameraSizeChangeReceiver, new IntentFilter("CHANGE_CAMERA_SIZE"));
         }
     }
 
@@ -315,21 +327,33 @@ public class CursorAccessibilityService extends AccessibilityService implements 
                     .build())
             .build();
 
-    /** Auto-pause when not looking at camera, auto-resume when looking again. */
+    /** Auto-pause when not looking at camera or face lost, auto-resume when looking again. */
     private void checkGazeAutoPause() {
         if (!gazePauseEnabled) {
             return;
         }
 
-        boolean isLooking = facelandmarkerHelper.isLookingAtCamera();
+        // Consider "not looking" if face is not visible OR not looking at camera
+        boolean isFaceVisible = facelandmarkerHelper.isFaceVisible;
+        boolean isLooking = isFaceVisible && facelandmarkerHelper.isLookingAtCamera();
+        long now = System.currentTimeMillis();
 
-        // Transition from looking to not looking -> pause
-        if (wasLookingAtCamera && !isLooking && serviceState == ServiceState.ENABLE) {
-            togglePause();
-        }
-        // Transition from not looking to looking -> resume
-        else if (!wasLookingAtCamera && isLooking && serviceState == ServiceState.PAUSE) {
-            togglePause();
+        if (isLooking) {
+            // Start debounce timer when first detecting "looking"
+            if (lookingStartTime == 0) {
+                lookingStartTime = now;
+            }
+            // Resume after sustained "looking" for debounce duration
+            if (serviceState == ServiceState.PAUSE && (now - lookingStartTime) >= LOOKING_DEBOUNCE_MS) {
+                togglePause();
+            }
+        } else {
+            // Not looking - pause immediately if currently enabled
+            if (serviceState == ServiceState.ENABLE) {
+                togglePause();
+            }
+            // Reset debounce timer
+            lookingStartTime = 0;
         }
 
         wasLookingAtCamera = isLooking;
@@ -346,11 +370,17 @@ public class CursorAccessibilityService extends AccessibilityService implements 
                 facelandmarkerHelper.mpInputWidth,
                 facelandmarkerHelper.mpInputHeight);
 
+        // For debug display: show "not looking", "waiting", or "looking"
+        boolean isLookingForDebug = facelandmarkerHelper.isFaceVisible && facelandmarkerHelper.isLookingAtCamera();
+        boolean isWaitingForDebounce = isLookingForDebug && lookingStartTime > 0
+                && (System.currentTimeMillis() - lookingStartTime) < LOOKING_DEBOUNCE_MS;
         serviceUiManager.drawGaze(
                 facelandmarkerHelper.getNoseBridgeCoordXY(),
                 facelandmarkerHelper.getFaceNormal(),
-                gazePauseEnabled ? facelandmarkerHelper.isLookingAtCamera() : true,
+                gazePauseEnabled ? isLookingForDebug : true,
                 gazePauseEnabled,
+                gazePauseEnabled && isWaitingForDebounce,
+                facelandmarkerHelper.getFailedValidationCheck(),
                 facelandmarkerHelper.mpInputWidth,
                 facelandmarkerHelper.mpInputHeight);
 
@@ -468,6 +498,7 @@ public class CursorAccessibilityService extends AccessibilityService implements 
             Log.w(TAG, "No Blendshape named " + requestedScoreBlendshapeName);
         }
     }
+
 
     private void sendBroadcastServiceState(String state) {
         Intent intent;
@@ -620,6 +651,7 @@ public class CursorAccessibilityService extends AccessibilityService implements 
         unregisterReceiver(enableScorePreviewReceiver);
         unregisterReceiver(serviceUiManager.flyInWindowReceiver);
         unregisterReceiver(serviceUiManager.flyOutWindowReceiver);
+        unregisterReceiver(serviceUiManager.cameraSizeChangeReceiver);
 
         super.onDestroy();
     }

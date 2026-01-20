@@ -29,8 +29,8 @@ android {
         applicationId 'com.google.projectgameface'
         minSdk 27
         targetSdk 34
-        versionCode 102 // 0.01 = 101
-        versionName "helgi-edition-v0.02"
+        versionCode 103 // 0.01 = 101
+        versionName "helgi-edition-v0.03"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
