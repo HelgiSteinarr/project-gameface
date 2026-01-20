@@ -50,6 +50,7 @@ public class CameraBoxOverlay extends View {
     private float gazeEndX = -100.f;
     private float gazeEndY = -100.f;
     private boolean isLooking = false;
+    private boolean gazeEnabled = true;
     private static final float GAZE_LINE_LENGTH = 40.f;
 
     /** Debug: face normal values for display. */
@@ -105,12 +106,15 @@ public class CameraBoxOverlay extends View {
         canvas.drawCircle(noseBridgeX, noseBridgeY, 5, noseBridgePaint);
 
         // Debug: face normal line (direction face is pointing)
-        Paint gazePaint = isLooking ? gazePaintGreen : gazePaintRed;
+        // Use neutral color (white) when gaze auto-pause is disabled
+        Paint gazePaint = gazeEnabled ? (isLooking ? gazePaintGreen : gazePaintRed) : paint;
         canvas.drawLine(noseBridgeX, noseBridgeY, gazeEndX, gazeEndY, gazePaint);
 
-        // Debug: looking status
-        String lookingText = isLooking ? "Looking" : "Not looking";
-        canvas.drawText(lookingText, DEBUG_TEXT_LOC_X, 30, gazePaint);
+        // Debug: looking status (only show when gaze auto-pause is enabled)
+        if (gazeEnabled) {
+            String lookingText = isLooking ? "Looking" : "Not looking";
+            canvas.drawText(lookingText, DEBUG_TEXT_LOC_X, 30, gazePaint);
+        }
 
         // Debug: face normal vector values
         String normalText = String.format("N:(%.2f,%.2f,%.2f)", debugNormalX, debugNormalY, debugNormalZ);
@@ -139,12 +143,13 @@ public class CameraBoxOverlay extends View {
         invalidate();
     }
 
-    public void setGaze(float bridgeX, float bridgeY, float normalX, float normalY, float normalZ, boolean looking) {
+    public void setGaze(float bridgeX, float bridgeY, float normalX, float normalY, float normalZ, boolean looking, boolean enabled) {
         noseBridgeX = bridgeX;
         noseBridgeY = bridgeY;
         gazeEndX = bridgeX + normalX * GAZE_LINE_LENGTH;
         gazeEndY = bridgeY + normalY * GAZE_LINE_LENGTH;
         isLooking = looking;
+        gazeEnabled = enabled;
         // Store for debug display
         debugNormalX = normalX;
         debugNormalY = normalY;

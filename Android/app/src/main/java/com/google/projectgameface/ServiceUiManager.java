@@ -627,11 +627,11 @@ public class ServiceUiManager {
         noseCoord[1] * innerCameraImageView.getHeight() / mpImageHeight);
   }
 
-  public void drawGaze(float[] noseBridgeCoord, float[] faceNormal, boolean isLooking, int mpImageWidth, int mpImageHeight) {
+  public void drawGaze(float[] noseBridgeCoord, float[] faceNormal, boolean isLooking, boolean gazeEnabled, int mpImageWidth, int mpImageHeight) {
     float bridgeX = noseBridgeCoord[0] * innerCameraImageView.getWidth() / mpImageWidth;
     float bridgeY = noseBridgeCoord[1] * innerCameraImageView.getHeight() / mpImageHeight;
     // Pass full 3D normal for debug display, X/Y used for line direction
-    cameraBoxOverlay.setGaze(bridgeX, bridgeY, faceNormal[0], faceNormal[1], faceNormal[2], isLooking);
+    cameraBoxOverlay.setGaze(bridgeX, bridgeY, faceNormal[0], faceNormal[1], faceNormal[2], isLooking, gazeEnabled);
   }
 
   /** Fly camera box to screen center and hide all buttons (for setting page. ). */

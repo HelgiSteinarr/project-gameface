@@ -95,8 +95,10 @@ class FaceLandmarkerHelper extends HandlerThread {
     float faceNormalY = 0.f;
     float faceNormalZ = 0.f;
     boolean isLookingAtCamera = false;
-    private static final float LOOKING_THRESHOLD_DEGREES = 30.f;
 
+    // Configurable gaze thresholds (degrees)
+    private float yawThresholdDegrees = 30.f;
+    private float pitchThresholdDegrees = 60.f;
     public long mediapipeTimeMs = 0;
     public long preprocessTimeMs = 0;
 
@@ -378,11 +380,29 @@ class FaceLandmarkerHelper extends HandlerThread {
             }
 
             // Check if looking at camera: face normal should point toward camera (negative Z in MediaPipe)
-            // Calculate angle between face normal and camera direction (0, 0, -1)
-            // dot product with (0,0,-1) is just -faceNormalZ
-            float dotProduct = -faceNormalZ;
-            float angleFromCamera = (float) Math.toDegrees(Math.acos(Math.abs(dotProduct)));
+
+            // Left-Right
+            float yawLen = (float) Math.sqrt(faceNormalX * faceNormalX + faceNormalZ * faceNormalZ);
+            float yawDot = (faceNormalZ) / yawLen; // dot with camera forward (0,0,-1)
+            yawDot = Math.max(-1f, Math.min(1f, yawDot));
+            float yawAngle = (float) Math.toDegrees(Math.acos(yawDot));
+
+            // Up-Down
+            float pitchLen = (float) Math.sqrt(faceNormalY * faceNormalY + faceNormalZ * faceNormalZ);
+            float pitchDot = (faceNormalZ) / pitchLen;
+            pitchDot = Math.max(-1f, Math.min(1f, pitchDot));
+            float pitchAngle = (float) Math.toDegrees(Math.acos(pitchDot));
+
+            boolean lookingYaw   = yawAngle   < yawThresholdDegrees;
+            boolean lookingPitch = pitchAngle < pitchThresholdDegrees;
+            isLookingAtCamera = lookingYaw && lookingPitch;
+
+/*
+            looking at camera logic without regard to direction:
+            float crossProduct = -faceNormalZ;
+            float angleFromCamera = (float) Math.toDegrees(Math.acos(Math.abs(crossProduct)));
             isLookingAtCamera = angleFromCamera < LOOKING_THRESHOLD_DEGREES;
+*/
 
             if (result.faceBlendshapes().isPresent()) {
                 // Convert from Category to simple float array.
@@ -413,6 +433,16 @@ class FaceLandmarkerHelper extends HandlerThread {
     public float[] getFaceNormal() { return new float[] {faceNormalX, faceNormalY, faceNormalZ}; }
 
     public boolean isLookingAtCamera() { return isLookingAtCamera; }
+
+    /** Set the yaw threshold in degrees for gaze detection. */
+    public void setYawThreshold(float degrees) {
+        this.yawThresholdDegrees = degrees;
+    }
+
+    /** Set the pitch threshold in degrees for gaze detection. */
+    public void setPitchThreshold(float degrees) {
+        this.pitchThresholdDegrees = degrees;
+    }
 
     public float[] getBlendshapes() {
 

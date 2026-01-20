@@ -110,6 +110,9 @@ public class CursorAccessibilityService extends AccessibilityService implements 
     /** Track previous looking state for auto-pause. */
     private boolean wasLookingAtCamera = true;
 
+    /** Whether gaze-based auto-pause is enabled. */
+    private boolean gazePauseEnabled = true;
+
     /** The setting app may request the float blendshape score. */
     private String requestedScoreBlendshapeName = "";
 
@@ -126,6 +129,25 @@ public class CursorAccessibilityService extends AccessibilityService implements 
                 public void onReceive(Context context, Intent intent) {
                     String configName = intent.getStringExtra("configName");
                     cursorController.cursorMovementConfig.updateOneConfigFromSharedPreference(configName);
+
+                    // Handle gaze settings updates
+                    if (configName != null && facelandmarkerHelper != null) {
+                        if (configName.equals(CursorMovementConfig.CursorMovementConfigType.GAZE_PAUSE_ENABLED.name())) {
+                            boolean wasEnabled = gazePauseEnabled;
+                            gazePauseEnabled = cursorController.cursorMovementConfig.get(
+                                CursorMovementConfig.CursorMovementConfigType.GAZE_PAUSE_ENABLED) > 0;
+                            // If gaze was just disabled and we're in PAUSE state, unpause
+                            if (wasEnabled && !gazePauseEnabled && serviceState == ServiceState.PAUSE) {
+                                togglePause();
+                            }
+                        } else if (configName.equals(CursorMovementConfig.CursorMovementConfigType.GAZE_YAW_THRESHOLD.name())) {
+                            facelandmarkerHelper.setYawThreshold(cursorController.cursorMovementConfig.get(
+                                CursorMovementConfig.CursorMovementConfigType.GAZE_YAW_THRESHOLD));
+                        } else if (configName.equals(CursorMovementConfig.CursorMovementConfigType.GAZE_PITCH_THRESHOLD.name())) {
+                            facelandmarkerHelper.setPitchThreshold(cursorController.cursorMovementConfig.get(
+                                CursorMovementConfig.CursorMovementConfigType.GAZE_PITCH_THRESHOLD));
+                        }
+                    }
                 }
             };
 
@@ -262,6 +284,14 @@ public class CursorAccessibilityService extends AccessibilityService implements 
                 facelandmarkerHelper.setRotation(windowManager.getDefaultDisplay().getRotation());
                 facelandmarkerHelper.start();
                 facelandmarkerHelper.init(this);
+
+                // Load initial gaze settings from SharedPreferences
+                gazePauseEnabled = cursorController.cursorMovementConfig.get(
+                    CursorMovementConfig.CursorMovementConfigType.GAZE_PAUSE_ENABLED) > 0;
+                facelandmarkerHelper.setYawThreshold(cursorController.cursorMovementConfig.get(
+                    CursorMovementConfig.CursorMovementConfigType.GAZE_YAW_THRESHOLD));
+                facelandmarkerHelper.setPitchThreshold(cursorController.cursorMovementConfig.get(
+                    CursorMovementConfig.CursorMovementConfigType.GAZE_PITCH_THRESHOLD));
             });
 
         setImageAnalyzer();
@@ -287,6 +317,10 @@ public class CursorAccessibilityService extends AccessibilityService implements 
 
     /** Auto-pause when not looking at camera, auto-resume when looking again. */
     private void checkGazeAutoPause() {
+        if (!gazePauseEnabled) {
+            return;
+        }
+
         boolean isLooking = facelandmarkerHelper.isLookingAtCamera();
 
         // Transition from looking to not looking -> pause
@@ -315,7 +349,8 @@ public class CursorAccessibilityService extends AccessibilityService implements 
         serviceUiManager.drawGaze(
                 facelandmarkerHelper.getNoseBridgeCoordXY(),
                 facelandmarkerHelper.getFaceNormal(),
-                facelandmarkerHelper.isLookingAtCamera(),
+                gazePauseEnabled ? facelandmarkerHelper.isLookingAtCamera() : true,
+                gazePauseEnabled,
                 facelandmarkerHelper.mpInputWidth,
                 facelandmarkerHelper.mpInputHeight);
 

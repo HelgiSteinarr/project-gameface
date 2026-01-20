@@ -35,7 +35,12 @@ class CursorMovementConfig {
 
     /** How long the hold duration will be dispatch. */
     HOLD_TIME_MS,
-    HOLD_RADIUS
+    HOLD_RADIUS,
+
+    /** Gaze tracking settings for auto-pause feature. */
+    GAZE_PAUSE_ENABLED,
+    GAZE_YAW_THRESHOLD,
+    GAZE_PITCH_THRESHOLD
   }
 
   private static final String TAG = "CursorMovementConfig";
@@ -52,6 +57,9 @@ class CursorMovementConfig {
     public static final int SMOOTH_POINTER = 1;
     public static final int HOLD_TIME_MS = 5;
     public static final int HOLD_RADIUS = 2;
+    public static final int GAZE_PAUSE_ENABLED = 1; // 1 = enabled, 0 = disabled
+    public static final int GAZE_YAW_THRESHOLD = 3; // Raw value 0-10, multiplied to get degrees
+    public static final int GAZE_PITCH_THRESHOLD = 5; // Raw value 0-10, multiplied to get degrees
 
     private InitialRawValue() {}
   }
@@ -66,6 +74,9 @@ class CursorMovementConfig {
     public static final float SMOOTH_BLENDSHAPES = 30.f;
     public static final float HOLD_TIME_MS = 200.f;
     public static final float HOLD_RADIUS = 50;
+    public static final float GAZE_PAUSE_ENABLED = 1.f; // Boolean, no multiplier needed
+    public static final float GAZE_YAW_THRESHOLD = 10.f; // Degrees per raw unit (0-10 -> 0-100 degrees)
+    public static final float GAZE_PITCH_THRESHOLD = 10.f; // Degrees per raw unit (0-10 -> 0-100 degrees)
 
     private RawConfigMultiplier() {}
   }
@@ -93,6 +104,10 @@ class CursorMovementConfig {
     rawValueMap.put(CursorMovementConfigType.SMOOTH_BLENDSHAPES, InitialRawValue.DEFAULT_SPEED);
     rawValueMap.put(CursorMovementConfigType.HOLD_TIME_MS, InitialRawValue.HOLD_TIME_MS);
     rawValueMap.put(CursorMovementConfigType.HOLD_RADIUS, InitialRawValue.HOLD_RADIUS);
+
+    rawValueMap.put(CursorMovementConfigType.GAZE_PAUSE_ENABLED, InitialRawValue.GAZE_PAUSE_ENABLED);
+    rawValueMap.put(CursorMovementConfigType.GAZE_YAW_THRESHOLD, InitialRawValue.GAZE_YAW_THRESHOLD);
+    rawValueMap.put(CursorMovementConfigType.GAZE_PITCH_THRESHOLD, InitialRawValue.GAZE_PITCH_THRESHOLD);
   }
 
   /**
@@ -143,6 +158,15 @@ class CursorMovementConfig {
         break;
       case HOLD_RADIUS:
         multiplier = RawConfigMultiplier.HOLD_RADIUS;
+        break;
+      case GAZE_PAUSE_ENABLED:
+        multiplier = RawConfigMultiplier.GAZE_PAUSE_ENABLED;
+        break;
+      case GAZE_YAW_THRESHOLD:
+        multiplier = RawConfigMultiplier.GAZE_YAW_THRESHOLD;
+        break;
+      case GAZE_PITCH_THRESHOLD:
+        multiplier = RawConfigMultiplier.GAZE_PITCH_THRESHOLD;
         break;
       default:
         multiplier = 0.f;
