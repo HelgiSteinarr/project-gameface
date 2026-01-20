@@ -12,6 +12,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * MODIFICATION NOTICE
+ * as per the licence its required to give notice that this code has been modified by a third party.
+ * 2026 - Helgi Steinarr Juliusson, changes can be found in version control.
  */
 package com.google.projectgameface;
 import static androidx.core.math.MathUtils.clamp;
@@ -615,6 +619,19 @@ public class ServiceUiManager {
     cameraBoxOverlay.setWhiteDot(
         headCoord[0] * innerCameraImageView.getWidth() / mpImageWidth,
         headCoord[1] * innerCameraImageView.getHeight() / mpImageHeight);
+  }
+
+  public void drawNoseTip(float[] noseCoord, int mpImageWidth, int mpImageHeight) {
+    cameraBoxOverlay.setNoseDot(
+        noseCoord[0] * innerCameraImageView.getWidth() / mpImageWidth,
+        noseCoord[1] * innerCameraImageView.getHeight() / mpImageHeight);
+  }
+
+  public void drawGaze(float[] noseBridgeCoord, float[] faceNormal, boolean isLooking, int mpImageWidth, int mpImageHeight) {
+    float bridgeX = noseBridgeCoord[0] * innerCameraImageView.getWidth() / mpImageWidth;
+    float bridgeY = noseBridgeCoord[1] * innerCameraImageView.getHeight() / mpImageHeight;
+    // Pass full 3D normal for debug display, X/Y used for line direction
+    cameraBoxOverlay.setGaze(bridgeX, bridgeY, faceNormal[0], faceNormal[1], faceNormal[2], isLooking);
   }
 
   /** Fly camera box to screen center and hide all buttons (for setting page. ). */

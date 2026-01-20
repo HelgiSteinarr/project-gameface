@@ -1,1 +1,20 @@
-{}
+{
+    "Mouth left": [
+        "mouse", 
+        "left", 
+        0.31689999999999996, 
+        "single"
+    ], 
+    "Mouth right": [
+        "mouse", 
+        "right", 
+        0.21790000000000007, 
+        "single"
+    ], 
+    "Roll lower mouth": [
+        "mouse", 
+        "reset", 
+        0.4357, 
+        "single"
+    ]
+}

@@ -12,6 +12,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * MODIFICATION NOTICE
+ * as per the licence its required to give notice that this code has been modified by a third party.
+ * 2026 - Helgi Steinarr Juliusson, changes can be found in version control.
  */
 
 package com.google.projectgameface;
@@ -54,6 +58,14 @@ class FaceLandmarkerHelper extends HandlerThread {
 
     private static final int TOTAL_BLENDSHAPES = 52;
     private static final int FOREHEAD_INDEX = 8;
+    private static final int NOSE_TIP_INDEX = 1;
+    private static final int NOSE_CENTER_INDEX = 6;
+
+    // Landmarks for face normal calculation
+    private static final int FOREHEAD_TOP_INDEX = 10;
+    private static final int CHIN_INDEX = 152;
+    private static final int LEFT_CHEEK_INDEX = 234;
+    private static final int RIGHT_CHEEK_INDEX = 454;
 
     public volatile boolean isRunning = false;
 
@@ -73,6 +85,17 @@ class FaceLandmarkerHelper extends HandlerThread {
 
     float currHeadX = 0.f;
     float currHeadY = 0.f;
+    float currNoseTipX = 0.f;
+    float currNoseTipY = 0.f;
+    float currNoseBridgeX = 0.f;
+    float currNoseBridgeY = 0.f;
+
+    // Face normal vector (points outward from face)
+    float faceNormalX = 0.f;
+    float faceNormalY = 0.f;
+    float faceNormalZ = 0.f;
+    boolean isLookingAtCamera = false;
+    private static final float LOOKING_THRESHOLD_DEGREES = 30.f;
 
     public long mediapipeTimeMs = 0;
     public long preprocessTimeMs = 0;
@@ -307,6 +330,59 @@ class FaceLandmarkerHelper extends HandlerThread {
             isFaceVisible = true;
             currHeadX = result.faceLandmarks().get(0).get(FOREHEAD_INDEX).x() * mpInputWidth;
             currHeadY = result.faceLandmarks().get(0).get(FOREHEAD_INDEX).y() * mpInputHeight;
+            currNoseTipX = result.faceLandmarks().get(0).get(NOSE_TIP_INDEX).x() * mpInputWidth;
+            currNoseTipY = result.faceLandmarks().get(0).get(NOSE_TIP_INDEX).y() * mpInputHeight;
+            currNoseBridgeX = result.faceLandmarks().get(0).get(NOSE_CENTER_INDEX).x() * mpInputWidth;
+            currNoseBridgeY = result.faceLandmarks().get(0).get(NOSE_CENTER_INDEX).y() * mpInputHeight;
+
+            // Get 3D coordinates for face normal calculation
+            // Using forehead, chin, left cheek, right cheek to define face plane
+            float foreheadX = result.faceLandmarks().get(0).get(FOREHEAD_TOP_INDEX).x();
+            float foreheadY = result.faceLandmarks().get(0).get(FOREHEAD_TOP_INDEX).y();
+            float foreheadZ = result.faceLandmarks().get(0).get(FOREHEAD_TOP_INDEX).z();
+
+            float chinX = result.faceLandmarks().get(0).get(CHIN_INDEX).x();
+            float chinY = result.faceLandmarks().get(0).get(CHIN_INDEX).y();
+            float chinZ = result.faceLandmarks().get(0).get(CHIN_INDEX).z();
+
+            float leftCheekX = result.faceLandmarks().get(0).get(LEFT_CHEEK_INDEX).x();
+            float leftCheekY = result.faceLandmarks().get(0).get(LEFT_CHEEK_INDEX).y();
+            float leftCheekZ = result.faceLandmarks().get(0).get(LEFT_CHEEK_INDEX).z();
+
+            float rightCheekX = result.faceLandmarks().get(0).get(RIGHT_CHEEK_INDEX).x();
+            float rightCheekY = result.faceLandmarks().get(0).get(RIGHT_CHEEK_INDEX).y();
+            float rightCheekZ = result.faceLandmarks().get(0).get(RIGHT_CHEEK_INDEX).z();
+
+            // Vector A: from chin to forehead (vertical axis of face, pointing up)
+            float ax = foreheadX - chinX;
+            float ay = foreheadY - chinY;
+            float az = foreheadZ - chinZ;
+
+            // Vector B: from left cheek to right cheek (horizontal axis, pointing right)
+            float bx = rightCheekX - leftCheekX;
+            float by = rightCheekY - leftCheekY;
+            float bz = rightCheekZ - leftCheekZ;
+
+            // Cross product A × B = face normal (points outward from face)
+            // Right-hand rule: up × right = forward (out of face)
+            float nx = ay * bz - az * by;
+            float ny = az * bx - ax * bz;
+            float nz = ax * by - ay * bx;
+
+            // Normalize the face normal
+            float magnitude = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+            if (magnitude > 0) {
+                faceNormalX = nx / magnitude;
+                faceNormalY = ny / magnitude;
+                faceNormalZ = nz / magnitude;
+            }
+
+            // Check if looking at camera: face normal should point toward camera (negative Z in MediaPipe)
+            // Calculate angle between face normal and camera direction (0, 0, -1)
+            // dot product with (0,0,-1) is just -faceNormalZ
+            float dotProduct = -faceNormalZ;
+            float angleFromCamera = (float) Math.toDegrees(Math.acos(Math.abs(dotProduct)));
+            isLookingAtCamera = angleFromCamera < LOOKING_THRESHOLD_DEGREES;
 
             if (result.faceBlendshapes().isPresent()) {
                 // Convert from Category to simple float array.
@@ -330,6 +406,13 @@ class FaceLandmarkerHelper extends HandlerThread {
     public float[] getHeadCoordXY() {
         return new float[] {currHeadX, currHeadY};
     }
+    public float[] getNoseTipCoordXY() { return new float[] {currNoseTipX, currNoseTipY}; }
+
+    public float[] getNoseBridgeCoordXY() { return new float[] {currNoseBridgeX, currNoseBridgeY}; }
+
+    public float[] getFaceNormal() { return new float[] {faceNormalX, faceNormalY, faceNormalZ}; }
+
+    public boolean isLookingAtCamera() { return isLookingAtCamera; }
 
     public float[] getBlendshapes() {
 

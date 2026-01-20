@@ -12,6 +12,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * MODIFICATION NOTICE
+ * as per the licence its required to give notice that this code has been modified by a third party.
+ * 2026 - Helgi Steinarr Juliusson, changes can be found in version control.
  */
 
 package com.google.projectgameface;
@@ -102,6 +106,9 @@ public class CursorAccessibilityService extends AccessibilityService implements 
     }
 
     private ServiceState serviceState = ServiceState.DISABLE;
+
+    /** Track previous looking state for auto-pause. */
+    private boolean wasLookingAtCamera = true;
 
     /** The setting app may request the float blendshape score. */
     private String requestedScoreBlendshapeName = "";
@@ -278,6 +285,46 @@ public class CursorAccessibilityService extends AccessibilityService implements 
                     .build())
             .build();
 
+    /** Auto-pause when not looking at camera, auto-resume when looking again. */
+    private void checkGazeAutoPause() {
+        boolean isLooking = facelandmarkerHelper.isLookingAtCamera();
+
+        // Transition from looking to not looking -> pause
+        if (wasLookingAtCamera && !isLooking && serviceState == ServiceState.ENABLE) {
+            togglePause();
+        }
+        // Transition from not looking to looking -> resume
+        else if (!wasLookingAtCamera && isLooking && serviceState == ServiceState.PAUSE) {
+            togglePause();
+        }
+
+        wasLookingAtCamera = isLooking;
+    }
+
+    private void drawCameraBoxDebug() {
+        serviceUiManager.drawHeadCenter(
+                facelandmarkerHelper.getHeadCoordXY(),
+                facelandmarkerHelper.mpInputWidth,
+                facelandmarkerHelper.mpInputHeight);
+
+        serviceUiManager.drawNoseTip(
+                facelandmarkerHelper.getNoseTipCoordXY(),
+                facelandmarkerHelper.mpInputWidth,
+                facelandmarkerHelper.mpInputHeight);
+
+        serviceUiManager.drawGaze(
+                facelandmarkerHelper.getNoseBridgeCoordXY(),
+                facelandmarkerHelper.getFaceNormal(),
+                facelandmarkerHelper.isLookingAtCamera(),
+                facelandmarkerHelper.mpInputWidth,
+                facelandmarkerHelper.mpInputHeight);
+
+        serviceUiManager.updateDebugTextOverlay(
+                facelandmarkerHelper.preprocessTimeMs,
+                facelandmarkerHelper.mediapipeTimeMs,
+                serviceState == ServiceState.PAUSE);
+    }
+
     /**
      * Tick function of the service. This function runs every {@value UI_UPDATE}
      *
@@ -318,33 +365,18 @@ public class CursorAccessibilityService extends AccessibilityService implements 
                             cursorController.getCursorPositionXY()
                             );
 
-                        dispatchEvent();
-
-                        serviceUiManager.drawHeadCenter(
-                            facelandmarkerHelper.getHeadCoordXY(),
-                            facelandmarkerHelper.mpInputWidth,
-                            facelandmarkerHelper.mpInputHeight);
-
-                        serviceUiManager.updateDebugTextOverlay(
-                            facelandmarkerHelper.preprocessTimeMs,
-                            facelandmarkerHelper.mediapipeTimeMs,
-                            serviceState == ServiceState.PAUSE);
+                        dispatchEvent(); // check if any face gesture should trigger an action
+                        drawCameraBoxDebug(); // draw debug dots and text in floating camera
+                        checkGazeAutoPause(); // auto-pause when not looking at camera
                         break;
 
                     case PAUSE:
                         // In PAUSE state user cannot move cursor
                         // but still can perform some event from face gesture.
-                        dispatchEvent();
 
-                        serviceUiManager.drawHeadCenter(
-                            facelandmarkerHelper.getHeadCoordXY(),
-                            facelandmarkerHelper.mpInputWidth,
-                            facelandmarkerHelper.mpInputHeight);
-
-                        serviceUiManager.updateDebugTextOverlay(
-                            facelandmarkerHelper.preprocessTimeMs,
-                            facelandmarkerHelper.mediapipeTimeMs,
-                            getServiceState() == ServiceState.PAUSE);
+                        dispatchEvent(); // check if any face gesture should trigger an action
+                        drawCameraBoxDebug(); // draw debug dots and text in floating camera
+                        checkGazeAutoPause(); // auto-resume when looking at camera again
                         break;
 
                     default:
