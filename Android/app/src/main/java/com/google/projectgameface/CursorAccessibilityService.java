@@ -359,6 +359,24 @@ public class CursorAccessibilityService extends AccessibilityService implements 
         wasLookingAtCamera = isLooking;
     }
 
+    /** Check if drag expression was released in hold-to-drag mode. */
+    private void checkDragHoldRelease() {
+        // Only check in hold mode when actively dragging
+        if (!cursorController.isDragHoldModeEnabled() || !cursorController.isDragging) {
+            return;
+        }
+
+        // Check if the drag expression is no longer being held
+        if (!cursorController.isDragBlendshapeHeld(facelandmarkerHelper.getBlendshapes())) {
+            // Expression released - finish the drag action
+            DispatchEventHelper.finishDragAction(
+                this,
+                cursorController,
+                serviceUiManager,
+                0, 0);
+        }
+    }
+
     private void drawCameraBoxDebug() {
         serviceUiManager.drawHeadCenter(
                 facelandmarkerHelper.getHeadCoordXY(),
@@ -431,6 +449,7 @@ public class CursorAccessibilityService extends AccessibilityService implements 
                             );
 
                         dispatchEvent(); // check if any face gesture should trigger an action
+                        checkDragHoldRelease(); // check if hold-to-drag expression was released
                         drawCameraBoxDebug(); // draw debug dots and text in floating camera
                         checkGazeAutoPause(); // auto-pause when not looking at camera
                         break;

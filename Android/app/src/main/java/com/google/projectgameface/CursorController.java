@@ -433,5 +433,33 @@ public class CursorController {
 
     }
 
+    /**
+     * Check if the DRAG_TOGGLE blendshape is currently being held (above threshold).
+     * Used for hold-to-drag mode to detect when the expression is released.
+     *
+     * @param blendshapes The current blendshapes array from MediaPipe.
+     * @return true if the drag blendshape is above its threshold, false otherwise.
+     */
+    public boolean isDragBlendshapeHeld(float[] blendshapes) {
+        BlendshapeEventTriggerConfig.BlendshapeAndThreshold config =
+            blendshapeEventTriggerConfig.getAllConfig().get(BlendshapeEventTriggerConfig.EventType.DRAG_TOGGLE);
+
+        if (config == null || config.shape() == BlendshapeEventTriggerConfig.Blendshape.NONE) {
+            return false;
+        }
+
+        float score = blendshapes[config.shape().value];
+        return score > config.threshold();
+    }
+
+    /**
+     * Check if hold-to-drag mode is enabled.
+     *
+     * @return true if hold mode is enabled, false for toggle mode.
+     */
+    public boolean isDragHoldModeEnabled() {
+        return cursorMovementConfig.get(CursorMovementConfig.CursorMovementConfigType.DRAG_MODE) > 0;
+    }
+
 
 }

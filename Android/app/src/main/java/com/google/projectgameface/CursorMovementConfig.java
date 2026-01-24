@@ -12,6 +12,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * MODIFICATION NOTICE
+ * as per the licence its required to give notice that this code has been modified by a third party.
+ * 2026 - Helgi Steinarr Juliusson, changes can be found in version control.
  */
 package com.google.projectgameface;
 
@@ -40,7 +44,10 @@ class CursorMovementConfig {
     /** Gaze tracking settings for auto-pause feature. */
     GAZE_PAUSE_ENABLED,
     GAZE_YAW_THRESHOLD,
-    GAZE_PITCH_THRESHOLD
+    GAZE_PITCH_THRESHOLD,
+
+    /** Drag mode: 0 = toggle (default), 1 = hold expression to drag. */
+    DRAG_MODE
   }
 
   private static final String TAG = "CursorMovementConfig";
@@ -60,6 +67,7 @@ class CursorMovementConfig {
     public static final int GAZE_PAUSE_ENABLED = 1; // 1 = enabled, 0 = disabled
     public static final int GAZE_YAW_THRESHOLD = 3; // Raw value 0-10, multiplied to get degrees
     public static final int GAZE_PITCH_THRESHOLD = 5; // Raw value 0-10, multiplied to get degrees
+    public static final int DRAG_MODE = 0; // 0 = toggle, 1 = hold
 
     private InitialRawValue() {}
   }
@@ -77,6 +85,7 @@ class CursorMovementConfig {
     public static final float GAZE_PAUSE_ENABLED = 1.f; // Boolean, no multiplier needed
     public static final float GAZE_YAW_THRESHOLD = 10.f; // Degrees per raw unit (0-10 -> 0-100 degrees)
     public static final float GAZE_PITCH_THRESHOLD = 10.f; // Degrees per raw unit (0-10 -> 0-100 degrees)
+    public static final float DRAG_MODE = 1.f; // Integer mode, no multiplier needed
 
     private RawConfigMultiplier() {}
   }
@@ -108,6 +117,7 @@ class CursorMovementConfig {
     rawValueMap.put(CursorMovementConfigType.GAZE_PAUSE_ENABLED, InitialRawValue.GAZE_PAUSE_ENABLED);
     rawValueMap.put(CursorMovementConfigType.GAZE_YAW_THRESHOLD, InitialRawValue.GAZE_YAW_THRESHOLD);
     rawValueMap.put(CursorMovementConfigType.GAZE_PITCH_THRESHOLD, InitialRawValue.GAZE_PITCH_THRESHOLD);
+    rawValueMap.put(CursorMovementConfigType.DRAG_MODE, InitialRawValue.DRAG_MODE);
   }
 
   /**
@@ -167,6 +177,9 @@ class CursorMovementConfig {
         break;
       case GAZE_PITCH_THRESHOLD:
         multiplier = RawConfigMultiplier.GAZE_PITCH_THRESHOLD;
+        break;
+      case DRAG_MODE:
+        multiplier = RawConfigMultiplier.DRAG_MODE;
         break;
       default:
         multiplier = 0.f;

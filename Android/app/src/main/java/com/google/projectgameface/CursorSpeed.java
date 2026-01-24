@@ -67,6 +67,11 @@ public class CursorSpeed extends AppCompatActivity {
     private TextView textViewYawThreshold;
     private TextView textViewPitchThreshold;
 
+    // Drag settings UI elements
+    private TextView btnDragMode;
+    private int currentDragModeIndex = 0;
+    private static final String[] DRAG_MODE_NAMES = {"Toggle", "Hold"};
+
     // Debug settings
     private TextView btnCameraSize;
     private int currentCameraSizeIndex = 1; // Default to Medium
@@ -145,6 +150,9 @@ public class CursorSpeed extends AppCompatActivity {
         // Gaze settings setup
         setUpGazeSettings();
 
+        // Drag settings setup
+        setUpDragSettings();
+
         // Debug settings setup
         setUpDebugSettings();
 
@@ -170,6 +178,28 @@ public class CursorSpeed extends AppCompatActivity {
             Intent intent = new Intent("CHANGE_CAMERA_SIZE");
             intent.putExtra("sizeIndex", currentCameraSizeIndex);
             sendBroadcast(intent);
+        });
+    }
+
+    private void setUpDragSettings() {
+        SharedPreferences preferences = getSharedPreferences("GameFaceLocalConfig", Context.MODE_PRIVATE);
+
+        // Setup cycling button for drag mode
+        currentDragModeIndex = preferences.getInt(
+            String.valueOf(CursorMovementConfig.CursorMovementConfigType.DRAG_MODE),
+            CursorMovementConfig.InitialRawValue.DRAG_MODE);
+
+        btnDragMode = findViewById(R.id.btnDragMode);
+        btnDragMode.setText(DRAG_MODE_NAMES[currentDragModeIndex]);
+        btnDragMode.setOnClickListener(v -> {
+            // Cycle to next mode
+            currentDragModeIndex = (currentDragModeIndex + 1) % DRAG_MODE_NAMES.length;
+            btnDragMode.setText(DRAG_MODE_NAMES[currentDragModeIndex]);
+
+            // Save and broadcast the change
+            sendValueToService(
+                String.valueOf(CursorMovementConfig.CursorMovementConfigType.DRAG_MODE),
+                currentDragModeIndex);
         });
     }
 
